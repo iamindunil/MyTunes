@@ -1,5 +1,5 @@
 "use client"
-import { ModeToggle } from "../ModeToggle";
+import { ModeToggle } from "../mode-toggle";
 import Logo from "./logo";
 import { Button } from "../ui/button";
 import Search from "./search";
