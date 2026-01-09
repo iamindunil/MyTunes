@@ -1,49 +1,77 @@
-const api_url = process.env.NEXT_PUBLIC_API_URL;
-if(!api_url){
-    throw new Error('Missing NEXT_PUBLIC_API_URL environment variable');
-};
+const api_url = process.env.NEXT_PUBLIC_API_URL
 
-export const getSongsByQuery = async (e) => {
-    try {
-        return await fetch(`${api_url}search/songs?query=` + e);
-    }
-    catch (e) {
-        console.log(e);
-    }
-};
+if (!api_url) {
+  throw new Error("Missing NEXT_PUBLIC_API_URL environment variable")
+}
 
-export const getSongsById = async (e) => {
-    try {
-        return await fetch(`${api_url}songs/` + e);
-    }
-    catch (e) {
-        console.log(e);
-    }
-};
+/* ---------------- Shared Types ---------------- */
 
-export const getSongsSuggestions = async (e) => {
-    try {
-        return await fetch(`${api_url}songs/${e}/suggestions`);
-    }
-    catch (e) {
-        console.log(e);
-    }
-};
+export interface Song {
+  id: string
+  name: string
+  image: { url: string }[]
+  artists: {
+    primary: { name: string }[]
+  }
+  downloadUrl?: { url: string }[]
+}
 
-export const searchAlbumByQuery = async (e) => {
-    try {
-        return await fetch(`${api_url}search/albums?query=` + e);
-    }
-    catch (e) {
-        console.log(e);
-    }
-};
+export interface SongsResponse {
+  data: Song[]
+}
 
-export const getAlbumById = async (e) => {
-    try {
-        return await fetch(`${api_url}albums?id=` + e);
-    }
-    catch (e) {
-        console.log(e);
-    }
-};
+export interface SearchResponse {
+  data: {
+    results: Song[]
+  }
+}
+
+/* ---------------- Helpers ---------------- */
+
+async function safeFetch(url: string): Promise<Response | null> {
+  try {
+    const res = await fetch(url, { cache: "no-store" })
+    if (!res.ok) return null
+    return res
+  } catch (error) {
+    console.error("Fetch error:", error)
+    return null
+  }
+}
+
+/* ---------------- API Methods ---------------- */
+
+export async function getSongsByQuery(
+  query: string
+): Promise<Response | null> {
+  if (!query.trim()) return null
+  return safeFetch(`${api_url}search/songs?query=${encodeURIComponent(query)}`)
+}
+
+export async function getSongsById(
+  id: string
+): Promise<Response | null> {
+  if (!id) return null
+  return safeFetch(`${api_url}songs/${id}`)
+}
+
+export async function getSongsSuggestions(
+  id: string
+): Promise<Response | null> {
+  if (!id) return null
+  return safeFetch(`${api_url}songs/${id}/suggestions`)
+}
+
+export async function searchAlbumByQuery(
+  query: string
+): Promise<Response | null> {
+  if (!query.trim()) return null
+  return safeFetch(`${api_url}search/albums?query=${encodeURIComponent(query)}`)
+}
+
+export async function getAlbumById(
+  id: string
+): Promise<Response | null> {
+  if (!id) return null
+  return safeFetch(`${api_url}albums?id=${id}`)
+}

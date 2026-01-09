@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { getSongsById } from "@/lib/fetch"
+import { getSongsById, SongResponse } from "@/lib/fetch"
 import { Download, Play, Repeat, Repeat1, Share2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -15,22 +15,14 @@ import { IoPause } from "react-icons/io5"
 
 /* ---------------- Types ---------------- */
 
-interface Song {
-  id: string
-  name: string
-  image: { url: string }[]
-  artists: {
-    primary: { name: string }[]
-  }
-  downloadUrl: { url: string }[]
-}
+type Song = SongResponse["data"][0]
 
 /* ---------------- Component ---------------- */
 
 export default function Player({ id }: { id: string }) {
   const [data, setData] = useState<Song | null>(null)
   const [playing, setPlaying] = useState(true)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
 
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -38,69 +30,65 @@ export default function Player({ id }: { id: string }) {
   const [isLooping, setIsLooping] = useState(false)
   const [audioURL, setAudioURL] = useState("")
 
-  const next = useNextMusicProvider()
-  const { setCurrent, setDownloadProgress, downloadProgress } =
+  const { current, setCurrent, setDownloadProgress, downloadProgress } =
     useMusicProvider()
+
+  const next = useNextMusicProvider()
 
   /* ---------------- Fetch Song ---------------- */
 
-  const getSong = async () => {
-    const res = await getSongsById(id)
-    const json = await res.json()
-    const song: Song = json.data[0]
+  useEffect(() => {
+    const load = async () => {
+      const res = await getSongsById(id)
+      if (!res) return
 
-    setData(song)
+      const json: SongResponse = await res.json()
+      const song = json.data[0]
 
-    const url =
-      song.downloadUrl[2]?.url ||
-      song.downloadUrl[1]?.url ||
-      song.downloadUrl[0]?.url
+      setData(song)
 
-    setAudioURL(url)
-  }
+      const url =
+        song.downloadUrl[2]?.url ||
+        song.downloadUrl[1]?.url ||
+        song.downloadUrl[0]?.url
 
-  /* ---------------- Helpers ---------------- */
+      setAudioURL(url)
+    }
 
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60)
-    const seconds = Math.floor(time % 60)
-    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(
-      2,
-      "0"
-    )}`
-  }
+    load()
+  }, [id])
 
-  const togglePlayPause = () => {
+  /* ---------------- Audio Sync ---------------- */
+
+  useEffect(() => {
     if (!audioRef.current) return
 
-    playing ? audioRef.current.pause() : audioRef.current.play()
-    setPlaying(!playing)
-  }
+    audioRef.current.currentTime = current
 
-  const handleSeek = (value: number[]) => {
-    if (!audioRef.current) return
-    audioRef.current.currentTime = value[0]
-    setCurrentTime(value[0])
-  }
+    const update = () => {
+      if (!audioRef.current) return
+      setCurrentTime(audioRef.current.currentTime)
+      setDuration(audioRef.current.duration)
+      setCurrent(audioRef.current.currentTime)
+    }
 
-  const loopSong = () => {
-    if (!audioRef.current) return
-    audioRef.current.loop = !isLooping
-    setIsLooping(!isLooping)
-  }
+    audioRef.current.addEventListener("timeupdate", update)
+    return () =>
+      audioRef.current?.removeEventListener("timeupdate", update)
+  }, [])
 
   /* ---------------- Download ---------------- */
 
   const downloadSong = async () => {
-    if (!audioURL) return
+    if (!audioURL || !data) return
 
     setIsDownloading(true)
     setDownloadProgress(0)
 
-    const response = await fetch(audioURL)
-    if (!response.body) return
+    const res = await fetch(audioURL)
+    if (!res.body) return
 
-    const reader = response.body.getReader()
+    const reader = res.body.getReader()
     const chunks: Uint8Array[] = []
 
     while (true) {
@@ -109,12 +97,16 @@ export default function Player({ id }: { id: string }) {
       if (value) chunks.push(value)
     }
 
-    const blob = new Blob(chunks)
+    const blob = new Blob(
+      chunks.map((c) => c.buffer),
+      { type: "audio/mpeg" }
+    )
+
     const url = URL.createObjectURL(blob)
 
     const a = document.createElement("a")
     a.href = url
-    a.download = `${data?.name}.mp3`
+    a.download = `${data.name}.mp3`
     a.click()
 
     URL.revokeObjectURL(url)
@@ -124,30 +116,12 @@ export default function Player({ id }: { id: string }) {
     setDownloadProgress(0)
   }
 
-  /* ---------------- Effects ---------------- */
-
-  useEffect(() => {
-    getSong()
-  }, [id])
-
-  useEffect(() => {
-    if (!audioRef.current) return
-
-    const update = () => {
-      setCurrentTime(audioRef.current!.currentTime)
-      setDuration(audioRef.current!.duration)
-      setCurrent(audioRef.current!.currentTime)
-    }
-
-    audioRef.current.addEventListener("timeupdate", update)
-    return () =>
-      audioRef.current?.removeEventListener("timeupdate", update)
-  }, [])
-
   /* ---------------- UI ---------------- */
 
+  if (!data) return <Skeleton className="h-48 w-full" />
+
   return (
-    <div className="mt-10">
+    <div className="px-6 md:px-20 lg:px-32 mt-10">
       <audio
         ref={audioRef}
         src={audioURL}
@@ -156,65 +130,63 @@ export default function Player({ id }: { id: string }) {
         onPause={() => setPlaying(false)}
       />
 
-      {!data ? (
-        <Skeleton className="h-40 w-full" />
-      ) : (
-        <div className="px-6 md:px-20 lg:px-32 grid gap-4">
-          <Image
-            src={data.image[2].url}
-            alt={data.name}
-            width={150}
-            height={150}
-            className="rounded-xl"
-          />
+      <Image
+        src={data.image[2].url}
+        alt={data.name}
+        width={160}
+        height={160}
+        className="rounded-xl"
+      />
 
-          <h1 className="text-xl font-bold">{data.name}</h1>
+      <h1 className="text-xl font-bold mt-4">{data.name}</h1>
 
-          <Link
-            href={`/search/${encodeURIComponent(
-              data.artists.primary[0]?.name
-            )}`}
-            className="text-muted-foreground"
-          >
-            {data.artists.primary[0]?.name}
-          </Link>
+      <Link
+        href={`/search/${encodeURIComponent(
+          data.artists.primary[0]?.name
+        )}`}
+        className="text-muted-foreground"
+      >
+        {data.artists.primary[0]?.name}
+      </Link>
 
-          <Slider
-            value={[currentTime]}
-            max={duration}
-            onValueChange={handleSeek}
-          />
+      <Slider
+        value={[currentTime]}
+        max={duration}
+        onValueChange={(v) => {
+          if (!audioRef.current) return
+          audioRef.current.currentTime = v[0]
+          setCurrentTime(v[0])
+        }}
+      />
 
-          <div className="flex justify-between text-sm">
-            <span>{formatTime(currentTime)}</span>
-            <span>{formatTime(duration)}</span>
-          </div>
+      <div className="flex justify-between text-sm">
+        <span>{Math.floor(currentTime)}s</span>
+        <span>{Math.floor(duration)}s</span>
+      </div>
 
-          <div className="flex gap-3">
-            <Button onClick={togglePlayPause}>
-              {playing ? <IoPause /> : <Play />}
-            </Button>
+      <div className="flex gap-3 mt-4">
+        <Button onClick={() => playing ? audioRef.current?.pause() : audioRef.current?.play()}>
+          {playing ? <IoPause /> : <Play />}
+        </Button>
 
-            <Button onClick={loopSong}>
-              {isLooping ? <Repeat1 /> : <Repeat />}
-            </Button>
+        <Button onClick={() => {
+          if (!audioRef.current) return
+          audioRef.current.loop = !isLooping
+          setIsLooping(!isLooping)
+        }}>
+          {isLooping ? <Repeat1 /> : <Repeat />}
+        </Button>
 
-            <Button onClick={downloadSong}>
-              {isDownloading ? downloadProgress : <Download />}
-            </Button>
+        <Button onClick={downloadSong}>
+          {isDownloading ? downloadProgress : <Download />}
+        </Button>
 
-            <Button onClick={() => navigator.share?.({ url: location.href })}>
-              <Share2 />
-            </Button>
-          </div>
-        </div>
-      )}
+        <Button onClick={() => navigator.share?.({ url: location.href })}>
+          <Share2 />
+        </Button>
+      </div>
 
-      {next?.nextData && (
-        <div className="px-6 md:px-20 lg:px-32 mt-10">
-          <Next {...next.nextData} />
-        </div>
-      )}
+      {next.nextData && <Next {...next.nextData} />}
     </div>
   )
 }
