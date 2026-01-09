@@ -98,7 +98,7 @@ export default function Player({ id }: { id: string }) {
     }
 
     const blob = new Blob(
-      chunks.map((c) => c.buffer),
+      chunks,
       { type: "audio/mpeg" }
     )
 
