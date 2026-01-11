@@ -2,7 +2,23 @@ import Link from "next/link";
 import { Skeleton } from "../ui/skeleton";
 import { Badge } from "../ui/badge";
 
-export default function AlbumCard({ title, image, artist, id, desc, lang }) {
+interface AlbumCardProps {
+  title?: string
+  image?: string
+  artist?: string
+  id: string
+  desc?: string
+  lang?: string
+}
+
+export default function AlbumCard({
+  title,
+  image,
+  artist,
+  id,
+  desc,
+  lang,
+}: AlbumCardProps)  {
     return (
         <div className="h-fit w-[200px]">
             <div className="overflow-hidden rounded-md">

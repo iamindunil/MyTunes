@@ -1,6 +1,16 @@
 import Link from "next/link";
 
-export default function ArtistCard({ image, name, id }) {
+interface ArtistCardProps {
+  id: string
+  name: string
+  image: string
+}
+
+export default function ArtistCard({
+  id,
+  name,
+  image
+}: ArtistCardProps) {
     return (
         <Link href={"/search/" + `${encodeURI(name.toLowerCase().split(" ").join("+"))}`}>
             <div className="overflow-hidden h-[100px] w-[100px] rounded-md">
